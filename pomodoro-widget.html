@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Pomodoro Timer</title>
+<style>
+  :root{
+    --accent:#748451;       /* verde */
+    --accent-dim:#5f6e43;
+    --bg:#1c1c1e;
+    --panel:#232325;
+    --ring:#2c2c2e;
+    --text:#f5f5f5;
+    --text-dim:#9b9b9d;
+    --tab-bg:#2c2c2e;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:transparent;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  }
+  .card{
+    width:100%; max-width:420px; margin:0 auto;
+    background:var(--bg);
+    border-radius:22px;
+    padding:28px 24px 18px;
+    box-shadow:0 20px 50px rgba(0,0,0,.35);
+    color:var(--text);
+    user-select:none;
+  }
+  .tabs{
+    display:flex; gap:8px; justify-content:center; margin-bottom:28px;
+  }
+  .tab{
+    border:none; cursor:pointer;
+    padding:8px 16px;
+    border-radius:8px;
+    font-size:13px; font-weight:600;
+    background:var(--tab-bg);
+    color:var(--text-dim);
+    transition:background .2s, color .2s;
+  }
+  .tab.active{
+    background:var(--accent);
+    color:#fff;
+  }
+  .ring-wrap{
+    width:260px; height:260px;
+    margin:0 auto 26px;
+    position:relative;
+  }
+  svg{ transform:rotate(-90deg); }
+  .ring-bg{ stroke:var(--ring); fill:none; stroke-width:10; }
+  .ring-fg{
+    stroke:var(--accent); fill:none; stroke-width:10;
+    stroke-linecap:round;
+    transition:stroke-dashoffset 1s linear;
+  }
+  .ring-center{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+  }
+  .time{
+    font-size:44px; font-weight:700; letter-spacing:1px;
+    font-variant-numeric:tabular-nums;
+  }
+  .mode-label{
+    display:flex; align-items:center; gap:6px;
+    margin-top:4px; font-size:13px; color:var(--text-dim);
+    text-transform:lowercase;
+  }
+  .dot{
+    width:8px; height:8px; border-radius:50%;
+    background:var(--accent);
+  }
+  .controls{
+    display:flex; justify-content:center; gap:18px;
+    padding-bottom:10px;
+  }
+  .btn{
+    width:54px; height:54px;
+    border-radius:50%;
+    border:none; cursor:pointer;
+    background:var(--tab-bg);
+    color:var(--text);
+    display:flex; align-items:center; justify-content:center;
+    transition:background .2s, transform .1s;
+  }
+  .btn:hover{ background:#3a3a3c; }
+  .btn:active{ transform:scale(.94); }
+  .btn.primary{ background:var(--accent); }
+  .btn.primary:hover{ background:var(--accent-dim); }
+  .footer{
+    text-align:center; font-size:11px; color:#5a5a5c; margin-top:6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" data-mode="work" data-min="25">Pomodoro</button>
+    <button class="tab" data-mode="short" data-min="5">Short Break</button>
+    <button class="tab" data-mode="long" data-min="15">Long Break</button>
+  </div>
+
+  <div class="ring-wrap">
+    <svg width="260" height="260" viewBox="0 0 260 260">
+      <circle class="ring-bg" cx="130" cy="130" r="115"></circle>
+      <circle class="ring-fg" id="ring" cx="130" cy="130" r="115"
+              stroke-dasharray="722.6" stroke-dashoffset="0"></circle>
+    </svg>
+    <div class="ring-center">
+      <div class="time" id="time">25:00</div>
+      <div class="mode-label"><span class="dot"></span><span id="modeText">work</span></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="playBtn" aria-label="Start/Pause">
+      <svg id="playIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button class="btn" id="resetBtn" aria-label="Reset">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="footer">Pomodoro Timer</div>
+</div>
+
+<script>
+  const CIRC = 2 * Math.PI * 115;
+  const ring = document.getElementById('ring');
+  const timeEl = document.getElementById('time');
+  const modeText = document.getElementById('modeText');
+  const playBtn = document.getElementById('playBtn');
+  const playIcon = document.getElementById('playIcon');
+  const resetBtn = document.getElementById('resetBtn');
+  const tabs = document.querySelectorAll('.tab');
+
+  let totalSeconds = 25 * 60;
+  let remaining = totalSeconds;
+  let running = false;
+  let timerId = null;
+  let currentMode = 'work';
+
+  function format(s){
+    const m = Math.floor(s/60).toString().padStart(2,'0');
+    const sec = (s%60).toString().padStart(2,'0');
+    return `${m}:${sec}`;
+  }
+
+  function updateRing(){
+    const progress = remaining / totalSeconds;
+    ring.style.strokeDasharray = CIRC;
+    ring.style.strokeDashoffset = CIRC * (1 - progress);
+  }
+
+  function tick(){
+    if(remaining <= 0){
+      pause();
+      return;
+    }
+    remaining--;
+    timeEl.textContent = format(remaining);
+    updateRing();
+  }
+
+  function play(){
+    running = true;
+    playIcon.innerHTML = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+    timerId = setInterval(tick, 1000);
+  }
+
+  function pause(){
+    running = false;
+    playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    clearInterval(timerId);
+  }
+
+  playBtn.addEventListener('click', () => running ? pause() : play());
+
+  resetBtn.addEventListener('click', () => {
+    pause();
+    remaining = totalSeconds;
+    timeEl.textContent = format(remaining);
+    updateRing();
+  });
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      pause();
+      currentMode = tab.dataset.mode;
+      totalSeconds = parseInt(tab.dataset.min) * 60;
+      remaining = totalSeconds;
+      timeEl.textContent = format(remaining);
+      modeText.textContent = currentMode === 'work' ? 'work'
+                              : currentMode === 'short' ? 'short break'
+                              : 'long break';
+      updateRing();
+    });
+  });
+
+  updateRing();
+</script>
+
+</body>
+</html>
